@@ -1,0 +1,283 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Mini contenedor en Go</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&display=swap">
+<style>
+/* Layout: columna única de lectura (~860px), secciones separadas por un titular condensado y una regla fina.
+   Los diagramas (capas del overlay y secuencia de arranque) son bloques CSS, no imágenes. */
+:root {
+  --bg: #eef1f4;
+  --surface: #ffffff;
+  --fg: #16212e;
+  --muted: #5a6877;
+  --line: #d3dae1;
+  --accent: #0b6e8a;
+  --accent-soft: #d9eef4;
+  --lower: #dfe5ea;
+  --upper: #fbe7c4;
+  --merged: #cfe9df;
+  --code-bg: #e5eaef;
+  --ok: #1d7a4b;
+  --warn: #a4570b;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-head: "IBM Plex Sans Condensed", "IBM Plex Sans", "Arial Narrow", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1822; --surface: #17232f; --fg: #e3e9ef; --muted: #98a6b4; --line: #2a3947;
+    --accent: #5cc3df; --accent-soft: #14323d; --lower: #223140; --upper: #4a3a1a; --merged: #1b4034;
+    --code-bg: #0b121a; --ok: #62d09a; --warn: #f0a85a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1822; --surface: #17232f; --fg: #e3e9ef; --muted: #98a6b4; --line: #2a3947;
+  --accent: #5cc3df; --accent-soft: #14323d; --lower: #223140; --upper: #4a3a1a; --merged: #1b4034;
+  --code-bg: #0b121a; --ok: #62d09a; --warn: #f0a85a; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 16px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 72px;
+}
+main { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 56px; }
+h1, h2, h3 { font-family: var(--f-head); font-weight: 600; text-wrap: balance; margin: 0; line-height: 1.15; }
+h1 { font-size: clamp(2rem, 6vw, 3rem); letter-spacing: -0.01em; }
+h2 { font-size: 1.6rem; padding-bottom: 8px; border-bottom: 1px solid var(--line); margin-bottom: 20px; }
+h3 { font-size: 1.1rem; margin-bottom: 6px; }
+p { margin: 0 0 12px; max-width: 68ch; }
+a { color: var(--accent); }
+code, pre { font-family: var(--f-mono); font-size: 0.86em; }
+code { background: var(--code-bg); padding: 1px 6px; border-radius: 4px; }
+pre { background: var(--code-bg); padding: 14px 16px; border-radius: 8px; overflow-x: auto; margin: 0 0 12px; line-height: 1.55; border: 1px solid var(--line); }
+pre code { background: none; padding: 0; font-size: 1em; }
+.eyebrow { font-family: var(--f-mono); font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-bottom: 10px; }
+.lede { font-size: 1.15rem; color: var(--muted); max-width: 60ch; margin-top: 14px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.chip { font-family: var(--f-mono); font-size: 0.78rem; border: 1px solid var(--line); background: var(--surface); padding: 3px 10px; border-radius: 999px; color: var(--muted); }
+
+/* tablas */
+.tw { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 0.93rem; }
+th, td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 0.74rem; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); font-weight: 500; background: var(--bg); }
+tr:last-child td { border-bottom: 0; }
+td:first-child { white-space: nowrap; }
+
+/* capas overlay */
+.layers { display: flex; flex-direction: column; gap: 6px; max-width: 560px; margin-bottom: 14px; }
+.layer { padding: 12px 16px; border-radius: 6px; border: 1px solid var(--line); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; }
+.layer b { font-family: var(--f-mono); font-weight: 500; }
+.layer span { color: var(--muted); font-size: 0.9rem; }
+.layer.merged { background: var(--merged); }
+.layer.upper { background: var(--upper); }
+.layer.lower { background: var(--lower); }
+
+/* secuencia */
+.seq { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+.seq > div { min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; }
+.seq h3 { display: flex; align-items: baseline; gap: 8px; }
+.seq h3 em { font-style: normal; font-family: var(--f-mono); font-size: 0.78rem; color: var(--accent); }
+.seq p { font-size: 0.92rem; color: var(--muted); margin: 0; }
+.seq.two > div.child { border-color: var(--accent); background: var(--accent-soft); }
+.seq.two > div.child p { color: var(--fg); }
+
+/* resultados */
+.results { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.results li { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+.results li:last-child { border-bottom: 0; }
+.results .st { font-family: var(--f-mono); font-size: 0.82rem; color: var(--ok); white-space: nowrap; }
+.results .st.w { color: var(--warn); }
+.results small { grid-column: 1 / -1; color: var(--muted); }
+
+.bug { border-left: 3px solid var(--warn); padding: 2px 0 2px 16px; margin-bottom: 18px; }
+.bug p { margin-bottom: 6px; }
+.note { background: var(--accent-soft); border-radius: 8px; padding: 14px 16px; }
+.note p:last-child { margin: 0; }
+ul.plain { margin: 0; padding-left: 20px; }
+ul.plain li { margin-bottom: 6px; max-width: 68ch; }
+footer { color: var(--muted); font-size: 0.85rem; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+
+<main>
+
+<header>
+  <div class="eyebrow">Linux · namespaces · overlayfs</div>
+  <h1>Un contenedor en 300 líneas de Go</h1>
+  <p class="lede">Alpine Linux, <code>unshare</code>, una capa overlay y <code>pivot_root</code>, sin Docker ni runc. Primero como script de shell y después como programa en Go, probado en un VPS Ubuntu.</p>
+  <div class="chips">
+    <span class="chip">Go · solo librería estándar</span>
+    <span class="chip">Alpine minirootfs 3.22.0</span>
+    <span class="chip">cgroup v2</span>
+    <span class="chip">probado en x86_64</span>
+  </div>
+</header>
+
+<section>
+  <h2>Qué se ha hecho</h2>
+  <p>El objetivo era lanzar el equivalente a un contenedor usando una imagen de Alpine ARM, <code>unshare</code> y un sistema de ficheros overlay. Un contenedor es un proceso de Linux con namespaces que le aíslan la vista del sistema, un sistema de ficheros raíz propio y, opcionalmente, límites de recursos.</p>
+  <ol class="plain" style="padding-left:20px">
+    <li>Se explicó el método y se escribió <code>mini-run.sh</code>, una versión en shell.</li>
+    <li>Se reescribió en Go como <code>mini</code>, que sale como un binario estático sin dependencias.</li>
+    <li>Se compiló para <code>linux/amd64</code> y <code>linux/arm64</code> y se probó por SSH en un VPS (x86_64, Ubuntu, kernel 7.0).</li>
+    <li>Las pruebas encontraron dos fallos y los dos están corregidos.</li>
+  </ol>
+</section>
+
+<section>
+  <h2>Cómo funciona</h2>
+  <p>El sistema de ficheros del contenedor es un overlay de dos capas. La base de Alpine se queda como solo lectura y todo lo que escribe el contenedor va a su propia capa.</p>
+  <div class="layers" role="img" aria-label="Capas del overlay: merged arriba, upper en medio, lower abajo">
+    <div class="layer merged"><b>merged/</b><span>lo que ve el contenedor como <code>/</code></span></div>
+    <div class="layer upper"><b>c/&lt;nombre&gt;/upper</b><span>escrituras de este contenedor</span></div>
+    <div class="layer lower"><b>lower/</b><span>Alpine minirootfs, compartido y de solo lectura</span></div>
+  </div>
+  <p>Varios contenedores comparten el mismo <code>lower</code> y cada uno tiene su <code>upper</code> y su <code>work</code>. Para resetear uno basta con borrar su <code>upper</code>.</p>
+
+  <h3 style="margin-top:28px">Secuencia de <code>mini run</code></h3>
+  <p>El binario se lanza dos veces: primero como proceso del host y después como <code>child</code>, ya dentro de los namespaces.</p>
+  <div class="seq two">
+    <div>
+      <h3><em>host</em> Prepara</h3>
+      <p>Crea <code>upper</code>, <code>work</code> y <code>merged</code>. Abre un pipe de sincronización.</p>
+    </div>
+    <div>
+      <h3><em>host</em> Clona</h3>
+      <p>Se relanza con <code>/proc/self/exe child</code> y las flags <code>CLONE_NEW*</code>.</p>
+    </div>
+    <div>
+      <h3><em>host</em> Configura</h3>
+      <p>Mete el PID en un cgroup con <code>memory.max</code> y crea el par veth con NAT si se pidió <code>--net</code>.</p>
+    </div>
+    <div>
+      <h3><em>host</em> Libera</h3>
+      <p>Escribe un byte en el pipe y espera a que el hijo termine. Después borra veth y cgroup.</p>
+    </div>
+    <div class="child">
+      <h3><em>child</em> Espera</h3>
+      <p>Lee el pipe (fd 3) hasta que el host termina cgroup y red. Después configura <code>eth0</code>.</p>
+    </div>
+    <div class="child">
+      <h3><em>child</em> Monta</h3>
+      <p>Hace el montaje privado, monta el overlay, <code>/proc</code>, <code>/sys</code>, bind de <code>/dev</code>, escribe <code>resolv.conf</code> y fija el hostname.</p>
+    </div>
+    <div class="child">
+      <h3><em>child</em> Entra</h3>
+      <p><code>pivot_root</code>, desmonta el host con <code>MNT_DETACH</code> y hace <code>exec</code> del programa, que queda como PID 1.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Los programas</h2>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Fichero</th><th>Qué es</th></tr></thead>
+      <tbody>
+        <tr><td><code>mini-run.sh</code></td><td>Versión en shell. Usa <code>unshare</code>, <code>mount</code>, <code>pivot_root</code>, <code>ip</code>, <code>iptables</code> y <code>systemd-run</code>. Es la referencia y no se probó en Linux.</td></tr>
+        <tr><td><code>mini/main.go</code></td><td>Versión en Go. Subcomandos <code>init</code>, <code>run</code>, <code>reset</code>, <code>ls</code> y el interno <code>child</code>.</td></tr>
+        <tr><td><code>mini/go.mod</code></td><td>Módulo <code>mini</code> con Go 1.21 y ninguna dependencia externa.</td></tr>
+        <tr><td><code>mini-linux-amd64</code></td><td>Binario estático para servidores x86_64. Es el que se probó.</td></tr>
+        <tr><td><code>mini-linux-arm64</code></td><td>Binario estático para ARM (Alpine ARM, VMs en Apple Silicon). Compila, sin probar en ARM.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 style="margin-top:28px">Uso</h3>
+<pre><code>sudo ./mini init                          # descarga el minirootfs a /var/lib/mini/lower
+sudo ./mini run web                       # shell en el contenedor "web"
+sudo ./mini run --net --mem 256M web      # con red aislada y límite de RAM
+sudo ./mini run db -- apk add redis       # ejecuta un comando concreto
+sudo ./mini reset web                     # borra la capa de escritura
+sudo ./mini ls</code></pre>
+  <p>Para compilar: <code>GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o mini-linux-arm64 .</code></p>
+</section>
+
+<section>
+  <h2>Librerías de Go</h2>
+  <p>Todo sale de la librería estándar. No hay <code>golang.org/x/sys</code> ni paquetes de terceros.</p>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Paquete</th><th>Para qué se usa</th></tr></thead>
+      <tbody>
+        <tr><td><code>syscall</code></td><td>El núcleo del programa: <code>SysProcAttr{Cloneflags}</code>, <code>Mount</code>, <code>Unmount</code>, <code>PivotRoot</code>, <code>Sethostname</code> y <code>Exec</code>.</td></tr>
+        <tr><td><code>os</code></td><td>Ficheros y directorios, pipe de sincronización, escritura en cgroups y <code>/proc/sys</code>, <code>Lchown</code>.</td></tr>
+        <tr><td><code>os/exec</code></td><td>Relanza el binario con <code>/proc/self/exe</code> y llama a <code>ip</code> e <code>iptables</code>.</td></tr>
+        <tr><td><code>archive/tar</code></td><td>Lee el minirootfs: directorios, ficheros, symlinks y hardlinks.</td></tr>
+        <tr><td><code>compress/gzip</code></td><td>Descomprime el <code>.tar.gz</code> en streaming.</td></tr>
+        <tr><td><code>net/http</code></td><td>Descarga el minirootfs desde <code>dl-cdn.alpinelinux.org</code>.</td></tr>
+        <tr><td><code>flag</code></td><td>Opciones <code>--net</code>, <code>--mem</code> y <code>--ver</code>.</td></tr>
+        <tr><td><code>hash/fnv</code></td><td>Saca la subred <code>10.200.N.0/24</code> a partir del nombre del contenedor.</td></tr>
+        <tr><td><code>path/filepath</code></td><td>Rutas, y comprobación de que el tar no escribe fuera del destino.</td></tr>
+        <tr><td><code>runtime</code></td><td>Comprueba que es Linux y elige <code>aarch64</code> o <code>x86_64</code> para la descarga.</td></tr>
+        <tr><td><code>fmt</code>, <code>io</code>, <code>strings</code></td><td>Formato de mensajes, copia de streams y manejo de texto.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 style="margin-top:28px">Mecanismos del kernel</h3>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Mecanismo</th><th>Papel</th></tr></thead>
+      <tbody>
+        <tr><td><code>CLONE_NEWNS</code></td><td>Namespace de montajes: el overlay solo existe dentro y desaparece al salir.</td></tr>
+        <tr><td><code>CLONE_NEWPID</code></td><td>El programa es PID 1 y <code>ps</code> solo ve el contenedor.</td></tr>
+        <tr><td><code>CLONE_NEWUTS</code></td><td>Hostname propio.</td></tr>
+        <tr><td><code>CLONE_NEWIPC</code></td><td>IPC aislado.</td></tr>
+        <tr><td><code>CLONE_NEWNET</code></td><td>Pila de red propia, solo con <code>--net</code>.</td></tr>
+        <tr><td>overlayfs</td><td><code>lowerdir</code>, <code>upperdir</code> y <code>workdir</code>.</td></tr>
+        <tr><td><code>pivot_root</code></td><td>Cambia la raíz de verdad, a diferencia de <code>chroot</code>, que se puede escapar.</td></tr>
+        <tr><td>cgroup v2</td><td><code>/sys/fs/cgroup/mini-&lt;nombre&gt;/memory.max</code>.</td></tr>
+        <tr><td>veth + NAT</td><td>Par de interfaces entre host y contenedor, con <code>MASQUERADE</code> en iptables.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="margin-top:12px;color:var(--muted)">Herramientas externas que debe haber en el host: <code>ip</code> e <code>iptables</code>, solo para <code>--net</code>.</p>
+</section>
+
+<section>
+  <h2>Resultado de las pruebas</h2>
+  <p>Ejecutadas por SSH en un VPS: x86_64, Ubuntu, kernel 7.0.0-42, cgroup v2 y overlay disponibles.</p>
+  <ul class="results">
+    <li><span>Descarga y extracción del minirootfs</span><span class="st">OK</span></li>
+    <li><span>Aislamiento: PID 1, hostname propio, <code>ps</code> limitado</span><span class="st">OK</span></li>
+    <li><span>Overlay: lo escrito va a <code>upper</code> y <code>lower</code> queda intacto</span><span class="st">OK</span></li>
+    <li><span>Red: <code>eth0</code> con IP propia y ping a 1.1.1.1</span><span class="st">OK</span></li>
+    <li><span>DNS, <code>apk add curl</code> y <code>curl https://example.com</code></span><span class="st">OK</span><small>Funciona tras el segundo arreglo.</small></li>
+    <li><span>Dos contenedores con red a la vez</span><span class="st">OK</span></li>
+    <li><span>Limpieza al salir de veths, mounts y cgroups</span><span class="st">OK</span></li>
+    <li><span>Límite de memoria</span><span class="st w">PARCIAL</span><small><code>memory.max</code> queda fijado en 32 MB y se alcanzó 323 veces, pero no hubo <code>oom_kill</code>: el host tiene swap y el kernel movió las páginas ahí.</small></li>
+  </ul>
+
+  <h3 style="margin-top:28px">Fallos encontrados y corregidos</h3>
+  <div class="bug">
+    <p><b>El veth no se encontraba dentro del netns.</b> <code>/sys</code> se montaba antes de entrar al netns y <code>/sys/class/net</code> mostraba las interfaces del host. Ahora se busca con <code>ip -o link</code>, que consulta el kernel directamente.</p>
+  </div>
+  <div class="bug">
+    <p><b>Sin DNS en el contenedor.</b> El <code>resolv.conf</code> del host apunta al stub <code>127.0.0.53</code> de systemd-resolved, que no existe en otro netns. Ahora se usa <code>/run/systemd/resolve/resolv.conf</code> y, si no hay, <code>1.1.1.1</code> y <code>8.8.8.8</code>.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Limitaciones y siguientes pasos</h2>
+  <ul class="plain">
+    <li><b>Límite de memoria blando con swap.</b> Para hacerlo estricto hay que escribir también <code>memory.swap.max=0</code>. Es una línea en <code>setupCgroup</code>.</li>
+    <li><b>Zombies.</b> El programa lanzado es PID 1 y no recoge procesos huérfanos. Para algo serio habría que añadir un mini-init o usar <code>tini</code>.</li>
+    <li><b>Subred por hash.</b> Dos nombres de contenedor pueden dar la misma subred, con una probabilidad baja.</li>
+    <li><b>ARM sin probar.</b> El binario <code>arm64</code> compila, pero las pruebas reales fueron solo en x86_64.</li>
+    <li><b>Sin ISO.</b> Se usa el minirootfs en lugar de la ISO de Alpine, porque la ISO contiene kernel y paquetes, no un rootfs. Si se quiere partir de la ISO, se puede añadir un <code>init-iso</code> que instale <code>alpine-base</code> con <code>apk --root</code>.</li>
+    <li><b>Solo root.</b> No hay modo rootless con user namespace.</li>
+  </ul>
+  <div class="note" style="margin-top:20px">
+    <p><b>Estado en el servidor de pruebas.</b> Los contenedores de prueba están borrados. Quedan el binario en <code>/tmp/mini</code> y el rootfs en <code>/var/lib/mini/lower</code>.</p>
+  </div>
+</section>
+
+<footer>Generado el 25 de noviembre de 2026 · código en <code>namaspeces-sample/mini</code></footer>
+
+</main>
+
+</body></html>

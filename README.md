@@ -2,8 +2,6 @@
 
 Un "contenedor" es solo un proceso de Linux con tres cosas añadidas: **namespaces** que aíslan lo que ve, un **sistema de ficheros raíz propio** y, opcionalmente, un **cgroup** que limita sus recursos. Este repo lo demuestra sin Docker ni runc, usando Alpine Linux, `unshare`, overlayfs y `pivot_root`.
 
-📖 Explicación completa con diagramas: [artifact](https://claude.ai/artifact/PPa5W917iJTbP9KYbCyKSd)
-
 ## Contenido
 
 | Fichero | Descripción |
@@ -12,6 +10,7 @@ Un "contenedor" es solo un proceso de Linux con tres cosas añadidas: **namespac
 | `mini/go.mod` | Módulo Go. |
 | `mini/mini-linux-amd64` | Binario estático para x86_64 (el que se probó). |
 | `mini/mini-linux-arm64` | Binario estático para ARM64 (compila, sin probar en ARM). |
+| `index.html` | Explicación completa con diagramas (ábrela en el navegador). |
 | `mini-run.sh` | Versión equivalente en shell (`unshare` + `mount` + `pivot_root`). Referencia, no probada en Linux. |
 
 ## Cómo funciona
